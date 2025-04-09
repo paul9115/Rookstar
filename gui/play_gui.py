@@ -1,4 +1,3 @@
-# gui/play_gui.py
 import pygame
 import chess
 import sys
