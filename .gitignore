@@ -12,8 +12,9 @@ env/
 *.pth
 
 # Training data and logs
-data/
-models/
+data/*.json
+data/*.pgn
+models/weights/*.pt
 
 # Jupyter Notebooks (if added later)
 .ipynb_checkpoints
