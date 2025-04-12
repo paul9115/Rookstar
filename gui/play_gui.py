@@ -4,6 +4,8 @@ import sys
 import torch
 import numpy as np
 import os
+import json
+import datetime
 from envs.chess_env import ChessEnv
 from models.net import RookstarNet
 
@@ -20,6 +22,8 @@ GREEN = (0, 255, 0)
 
 PIECE_IMAGES = {}
 ASSET_DIR = os.path.join(os.path.dirname(__file__), "assets")
+DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "games")
+os.makedirs(DATA_DIR, exist_ok=True)
 
 PROMOTION_OPTIONS = {
     pygame.K_q: chess.QUEEN,
@@ -91,6 +95,30 @@ def model_move(env, model):
 
     return best_move
 
+def save_game_json(board, result):
+    temp_board = chess.Board()
+    move_stack = list(board.move_stack)
+    san_moves = []
+    for move in move_stack: 
+        try:
+            san_moves.append(temp_board.san(move))
+            temp_board.push(move)
+        except Exception:
+            san_moves.append("?")
+            break
+    data = {
+        "moves": [move.uci() for move in move_stack],
+        "san": san_moves,
+        "reward": result,
+        "timestamp": datetime.datetime.now().isoformat()
+    }
+    filename = f"game_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    filepath = os.path.join(DATA_DIR, filename)
+    with open(filepath, 'w') as f:
+        json.dump(data, f, indent=2)
+    print(f"Game saved to {filepath}")
+    
+
 def main():
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -115,7 +143,10 @@ def main():
         clock.tick(30)
 
         if env.board.is_game_over():
-            print("Game over:", env.board.outcome())
+            result = env.board.result()
+            reward = 1 if result == "0-1" else -1 if result == "1-0" else 0
+            save_game_json(env.board, reward)
+            print(f"Game Over! Result: {result}")
             pygame.time.wait(3000)
             pygame.quit()
             sys.exit()
