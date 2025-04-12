@@ -13,13 +13,20 @@ SQUARE_SIZE = WIDTH // 8
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 BLUE = (0, 0, 255)
+GREY = (150, 150, 150)
 LIGHT_BROWN = (240, 217, 181)
 DARK_BROWN = (181, 136, 99)
-SELECTED_HIGHLIGHT = (0, 255, 0, 100)
-LEGAL_HIGHLIGHT = (0, 0, 255, 100)
+GREEN = (0, 255, 0)
 
 PIECE_IMAGES = {}
 ASSET_DIR = os.path.join(os.path.dirname(__file__), "assets")
+
+PROMOTION_OPTIONS = {
+    pygame.K_q: chess.QUEEN,
+    pygame.K_r: chess.ROOK,
+    pygame.K_b: chess.BISHOP,
+    pygame.K_n: chess.KNIGHT
+}
 
 def load_images():
     pieces = ['r', 'n', 'b', 'q', 'k', 'p']
@@ -36,16 +43,17 @@ def draw_board(screen, board, selected_square=None, legal_moves=None):
             color = LIGHT_BROWN if (row + col) % 2 == 0 else DARK_BROWN
             pygame.draw.rect(screen, color, pygame.Rect(col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
 
-    if selected_square is not None:
-        row = 7 - chess.square_rank(selected_square)
-        col = chess.square_file(selected_square)
-        pygame.draw.rect(screen, SELECTED_HIGHLIGHT[:3], pygame.Rect(col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
-
     if legal_moves:
         for move in legal_moves:
             row = 7 - chess.square_rank(move.to_square)
             col = chess.square_file(move.to_square)
-            pygame.draw.rect(screen, LEGAL_HIGHLIGHT[:3], pygame.Rect(col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
+            center = (col * SQUARE_SIZE + SQUARE_SIZE // 2, row * SQUARE_SIZE + SQUARE_SIZE // 2)
+            pygame.draw.circle(screen, GREY, center, 8)
+
+    if selected_square is not None:
+        row = 7 - chess.square_rank(selected_square)
+        col = chess.square_file(selected_square)
+        pygame.draw.rect(screen, GREEN, pygame.Rect(col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), width=3)
 
     for square in chess.SQUARES:
         piece = board.piece_at(square)
@@ -98,6 +106,7 @@ def main():
 
     selected_square = None
     legal_targets = []
+    pending_promotion = None
     clock = pygame.time.Clock()
 
     while True:
@@ -122,6 +131,16 @@ def main():
                 pygame.quit()
                 sys.exit()
 
+            if pending_promotion and event.type == pygame.KEYDOWN:
+                if event.key in PROMOTION_OPTIONS:
+                    promo_type = PROMOTION_OPTIONS[event.key]
+                    move = chess.Move(from_square=pending_promotion[0], to_square=pending_promotion[1], promotion=promo_type)
+                    if move in env.board.legal_moves:
+                        env.step(move.uci())
+                    pending_promotion = None
+                    selected_square = None
+                    legal_targets = []
+
             if event.type == pygame.MOUSEBUTTONDOWN:
                 pos = pygame.mouse.get_pos()
                 square = square_at_pixel(*pos)
@@ -132,14 +151,20 @@ def main():
                         selected_square = square
                         legal_targets = [m for m in env.board.legal_moves if m.from_square == selected_square]
                 else:
-                    move = chess.Move(from_square=selected_square, to_square=square)
-                    if move in env.board.legal_moves:
-                        if env.board.piece_at(selected_square).piece_type == chess.PAWN and chess.square_rank(square) in [0, 7]:
-                            move = chess.Move(from_square=selected_square, to_square=square, promotion=chess.QUEEN)
-                        if move in env.board.legal_moves:
-                            env.step(move.uci())
-                    selected_square = None
-                    legal_targets = []
+                    if square == selected_square or not any(m.to_square == square for m in legal_targets):
+                        selected_square = None
+                        legal_targets = []
+                    else:
+                        possible_moves = [m for m in legal_targets if m.to_square == square]
+                        if possible_moves:
+                            move = possible_moves[0]
+                            if env.board.piece_at(selected_square).piece_type == chess.PAWN and chess.square_rank(square) in [0, 7]:
+                                pending_promotion = (selected_square, square)
+                                print("Select promotion piece: Q (queen), R (rook), B (bishop), N (knight)")
+                            else:
+                                env.step(move.uci())
+                            selected_square = None
+                            legal_targets = []
 
 if __name__ == '__main__':
     main()
